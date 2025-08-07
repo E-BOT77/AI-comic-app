@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Comic Book Creator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .bangers-font {
+            font-family: 'Bangers', cursive;
+        }
+        .comic-panel {
+            border: 4px solid black;
+            box-shadow: 5px 5px 0px rgba(0, 0, 0, 1);
+            position: relative; /* Required for positioning the regenerate button */
+        }
+        .loader {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .delete-btn {
+            cursor: pointer;
+            color: #ef4444; /* red-500 */
+        }
+        .delete-btn:hover {
+            color: #dc2626; /* red-600 */
+        }
+        /* Hide the default file input */
+        #character-image-upload {
+            display: none;
+        }
+        .character-avatar {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 2px solid black;
+        }
+        .regenerate-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 9999px;
+            padding: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border: 1px solid rgba(0,0,0,0.2);
+            line-height: 1;
+        }
+        .regenerate-btn:hover {
+             background-color: white;
+        }
+        /* Disabled button style */
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-yellow-50 min-h-screen flex flex-col items-center p-4">
+
+    <div class="w-full max-w-4xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-5xl md:text-7xl bangers-font text-purple-600" style="text-shadow: 3px 3px 0px #000;">AI Comic Strip Generator</h1>
+            <p class="text-gray-700 mt-2">Define your style, create your characters, describe the scene, and write their dialogue!</p>
+        </header>
+
+        <main class="bg-white p-6 rounded-2xl shadow-lg border-4 border-black relative">
+            <button id="history-btn" class="absolute top-4 right-4 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg text-sm" disabled>History</button>
+            
+            <div id="message-area" class="text-center text-red-500 font-semibold mb-4"></div>
+            <div id="comic-strip" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 bg-white p-2 min-h-[200px]">
+                <!-- Panels will be dynamically inserted here -->
+            </div>
+
+            <!-- Style Definition Section -->
+            <div id="style-definition" class="mb-6 p-4 bg-gray-100 rounded-lg">
+                <h3 class="font-bold text-lg mb-2 bangers-font text-gray-800">Comic Style</h3>
+                <textarea id="style-prompt" class="w-full p-2 border-2 border-gray-300 rounded-lg" rows="2" placeholder="Describe the artistic style (e.g., anime, claymation, classic comic book, photorealistic)"></textarea>
+            </div>
+
+            <!-- Character Definition Section -->
+            <div id="character-definition" class="mb-6 p-4 bg-gray-100 rounded-lg">
+                <h3 class="font-bold text-lg mb-2 bangers-font text-gray-800">Your Characters</h3>
+                <div id="character-list" class="space-y-2 mb-4">
+                    <!-- Character inputs will be added here -->
+                </div>
+                <div class="space-y-2 p-3 bg-gray-200 rounded-lg">
+                     <input type="text" id="new-character-name" placeholder="Character Name (e.g., Captain Valiant)" class="w-full p-2 border-2 border-gray-300 rounded-lg">
+                     <textarea id="new-character-desc" placeholder="Manually describe character, or upload image..." class="w-full p-2 border-2 border-gray-300 rounded-lg" rows="3"></textarea>
+                     
+                     <input type="file" id="character-image-upload" accept="image/*">
+                     <label for="character-image-upload" id="upload-label" class="w-full text-center cursor-pointer bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm block">
+                         Upload Image for AI Description
+                     </label>
+
+                     <button id="add-character-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg text-sm mt-2">Add Character</button>
+                </div>
+            </div>
+
+            <!-- Panel Inputs Section -->
+            <div id="panel-inputs" class="space-y-6">
+                <div class="panel-input-group space-y-2 p-3 bg-gray-50 rounded-lg border-l-4 border-purple-500">
+                    <label class="font-semibold text-gray-700">Panel 1</label>
+                    <textarea id="panel-prompt-1" class="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-purple-500" placeholder="Describe the scene and character actions..."></textarea>
+                    <div id="panel-dialogues-1" class="space-y-1 pl-2 border-l-2 border-gray-200">
+                        <!-- Dialogue inputs for each character go here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-between items-center mt-6 flex-wrap gap-4">
+                <div>
+                    <button id="add-panel-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105">+ Add Panel</button>
+                    <button id="download-btn" class="hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105">Download</button>
+                </div>
+                <div>
+                    <button id="save-session-btn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105" disabled>Connecting...</button>
+                    <button id="generate-btn" class="bg-purple-600 hover:bg-purple-700 text-white bangers-font text-2xl py-3 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">Generate!</button>
+                </div>
+            </div>
+        </main>
+        
+        <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+           <div class="loader"></div>
+        </div>
+
+        <!-- History Modal -->
+        <div id="history-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50 p-4">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
+                <div class="p-4 border-b flex justify-between items-center">
+                    <h2 class="text-2xl bangers-font">Saved Sessions</h2>
+                    <button id="close-history-modal" class="text-2xl font-bold">&times;</button>
+                </div>
+                <div id="history-list" class="p-4 space-y-2 overflow-y-auto">
+                    <!-- History items will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // DOM Elements
+        const characterList = document.getElementById('character-list');
+        const newCharacterNameInput = document.getElementById('new-character-name');
+        const newCharacterDescInput = document.getElementById('new-character-desc');
+        const addCharacterBtn = document.getElementById('add-character-btn');
+        const characterImageUpload = document.getElementById('character-image-upload');
+        const uploadLabel = document.getElementById('upload-label');
+        const addPanelBtn = document.getElementById('add-panel-btn');
+        const panelInputsContainer = document.getElementById('panel-inputs');
+        const generateBtn = document.getElementById('generate-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const comicStripContainer = document.getElementById('comic-strip');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const messageArea = document.getElementById('message-area');
+        const stylePrompt = document.getElementById('style-prompt');
+        const saveSessionBtn = document.getElementById('save-session-btn');
+        const historyBtn = document.getElementById('history-btn');
+        const historyModal = document.getElementById('history-modal');
+        const closeHistoryModalBtn = document.getElementById('close-history-modal');
+        const historyList = document.getElementById('history-list');
+        
+        // App State
+        let characters = [];
+        let panelCount = 1;
+        let tempImageSrc = null;
+        let tempImageDescription = null;
+        let savedSessionsCache = []; // Cache for history modal
+
+        // Firebase State
+        let db, auth, userId, appId;
+
+        // --- Firebase Initialization ---
+        async function initializeFirebase() {
+            try {
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser.uid;
+                
+                saveSessionBtn.disabled = false;
+                historyBtn.disabled = false;
+                saveSessionBtn.textContent = 'Save Session';
+
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                messageArea.textContent = "Could not connect to storage. History will not work.";
+                saveSessionBtn.textContent = 'Save Disabled';
+            }
+        }
+
+        // --- Character Management ---
+        addCharacterBtn.addEventListener('click', () => {
+            const charName = newCharacterNameInput.value.trim();
+            const charDesc = tempImageDescription || newCharacterDescInput.value.trim();
+
+            if (charName && charDesc && !characters.some(c => c.name === charName)) {
+                characters.push({ name: charName, description: charDesc, imageSrc: tempImageSrc });
+                renderCharacterList();
+                updateAllDialogueInputs();
+                newCharacterNameInput.value = '';
+                newCharacterDescInput.value = '';
+                tempImageSrc = null;
+                tempImageDescription = null;
+                uploadLabel.textContent = 'Upload Image for AI Description';
+                characterImageUpload.value = ''; 
+            } else {
+                messageArea.textContent = 'Please provide a unique name and a description for the character.';
+            }
+        });
+
+        characterImageUpload.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            loadingOverlay.classList.remove('hidden');
+            uploadLabel.textContent = 'Analyzing...';
+            newCharacterDescInput.value = '';
+            
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                const base64Data = reader.result.split(',')[1];
+                tempImageSrc = reader.result;
+                try {
+                    const description = await generateDescriptionFromImage(base64Data);
+                    tempImageDescription = description;
+                    uploadLabel.textContent = 'Image Reference Saved!';
+                } catch (error) {
+                    messageArea.textContent = `Image analysis failed: ${error.message}`;
+                    tempImageSrc = null;
+                    tempImageDescription = null;
+                    uploadLabel.textContent = 'Analysis Failed. Try Again.';
+                } finally {
+                    loadingOverlay.classList.add('hidden');
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        async function generateDescriptionFromImage(base64ImageData) {
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const prompt = "Describe this character for an AI image generator. Be extremely detailed about their face, hair, clothes, and any distinct features to ensure consistency. Write it as a single paragraph.";
+
+            const payload = {
+              contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64ImageData } } ] } ],
+            };
+
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) throw new Error(`Image analysis API failed: ${response.status}`);
+
+            const result = await response.json();
+            if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                return result.candidates[0].content.parts[0].text;
+            } else {
+                throw new Error("Could not generate a description from the image.");
+            }
+        }
+
+        function renderCharacterList() {
+            characterList.innerHTML = '';
+            characters.forEach(char => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between bg-white p-2 rounded shadow-sm';
+                div.innerHTML = `
+                    ${char.imageSrc ? `<img src="${char.imageSrc}" alt="${char.name}" class="character-avatar mr-3">` : `<div class="character-avatar bg-gray-300 mr-3"></div>`}
+                    <div class="flex-grow">
+                        <p class="font-bold">${char.name}</p>
+                    </div>
+                    <button class="delete-btn ml-4 flex-shrink-0" onclick="window.removeCharacter('${char.name}')">✖</button>
+                `;
+                characterList.appendChild(div);
+            });
+        }
+        window.removeCharacter = (name) => {
+            characters = characters.filter(c => c.name !== name);
+            renderCharacterList();
+            updateAllDialogueInputs();
+        }
+
+        function updateAllDialogueInputs() {
+            for (let i = 1; i <= panelCount; i++) {
+                const dialogueContainer = document.getElementById(`panel-dialogues-${i}`);
+                if (dialogueContainer) renderDialogueInputs(dialogueContainer, i);
+            }
+        }
+        
+        function renderDialogueInputs(container, panelIndex) {
+            container.innerHTML = '';
+            if (characters.length > 0) {
+                 characters.forEach(char => {
+                    const dialogueInput = document.createElement('input');
+                    dialogueInput.type = 'text';
+                    dialogueInput.id = `panel-${panelIndex}-dialogue-${char.name.replace(/\s+/g, '-')}`;
+                    dialogueInput.className = 'w-full p-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400';
+                    dialogueInput.placeholder = `${char.name}'s dialogue...`;
+                    container.appendChild(dialogueInput);
+                });
+            } else {
+                 container.innerHTML = '<p class="text-xs text-gray-500">Add characters to give them dialogue.</p>';
+            }
+        }
+        
+        // --- Panel Management ---
+        function addPanel(scene = '', dialogues = {}) {
+            panelCount++;
+            const newPanel = document.createElement('div');
+            newPanel.className = 'panel-input-group space-y-2 p-3 bg-gray-50 rounded-lg border-l-4 border-purple-500';
+            newPanel.innerHTML = `
+                <label class="font-semibold text-gray-700">Panel ${panelCount}</label>
+                <textarea id="panel-prompt-${panelCount}" class="w-full p-3 border-2 border-gray-300 rounded-lg" placeholder="Describe the scene...">${scene}</textarea>
+                <div id="panel-dialogues-${panelCount}" class="space-y-1 pl-2 border-l-2 border-gray-200"></div>
+            `;
+            panelInputsContainer.appendChild(newPanel);
+            const dialogueContainer = document.getElementById(`panel-dialogues-${panelCount}`);
+            renderDialogueInputs(dialogueContainer, panelCount);
+             Object.entries(dialogues).forEach(([charName, text]) => {
+                const input = document.getElementById(`panel-${panelCount}-dialogue-${charName.replace(/\s+/g, '-')}`);
+                if (input) input.value = text;
+            });
+        }
+        addPanelBtn.addEventListener('click', () => addPanel());
+
+        // --- Generation Logic ---
+        function getPanelData(index) {
+            const panelIndex = index + 1;
+            const scene = document.getElementById(`panel-prompt-${panelIndex}`)?.value.trim();
+            if (!scene) return null;
+
+            const dialogues = {};
+            characters.forEach(char => {
+                const dialogueInput = document.getElementById(`panel-${panelIndex}-dialogue-${char.name.replace(/\s+/g, '-')}`);
+                const dialogue = dialogueInput ? dialogueInput.value.trim() : "";
+                if (dialogue) dialogues[char.name] = dialogue;
+            });
+            return { scene, dialogues };
+        }
+
+        function buildPanelPrompt(panelData){
+            const style = stylePrompt.value.trim() || 'Vibrant, clean, modern comic book art style.';
+            let fullPrompt = `Style: ${style}. Scene: ${panelData.scene}. `;
+            
+            if (panelData.dialogues && Object.keys(panelData.dialogues).length > 0) {
+                Object.entries(panelData.dialogues).forEach(([char, text]) => {
+                    fullPrompt += `${char} says "${text}". `;
+                });
+            }
+
+            const charactersInScene = characters.filter(c => 
+                panelData.scene.toLowerCase().includes(c.name.toLowerCase()) || 
+                (panelData.dialogues && panelData.dialogues[c.name])
+            );
+            
+            if (charactersInScene.length > 0) {
+                 fullPrompt += "Characters in scene: ";
+                 charactersInScene.forEach(c => {
+                    fullPrompt += `${c.name} (${c.description}). `;
+                 });
+            }
+            return fullPrompt;
+        }
+        
+        async function callImageGenerationAPI(prompt) {
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+            const payload = { 
+                instances: [{ "prompt": prompt }], 
+                parameters: { "sampleCount": 1 } 
+            };
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                const errorMsg = `API request failed: ${response.status}. Details: ${errorData}`;
+                throw new Error(errorMsg);
+            }
+            const result = await response.json();
+            if (result.predictions?.[0]?.bytesBase64Encoded) {
+                return `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+            } else {
+                 if (result.predictions?.[0]?.safetyRatings) {
+                    throw new Error("Blocked by safety policy. Please try rephrasing your prompt.");
+                 }
+                 throw new Error('Invalid response from API.');
+            }
+        }
+
+        async function generatePanelImage(index) {
+            const panelData = getPanelData(index);
+            if (!panelData) {
+                updatePanelWithError(index, "Panel data is missing.");
+                throw new Error("Panel data is missing.");
+            }
+
+            const panelDiv = comicStripContainer.children[index];
+            panelDiv.innerHTML = `<div class="loader"></div>`;
+
+            try {
+                const prompt = buildPanelPrompt(panelData);
+                const imageUrl = await callImageGenerationAPI(prompt);
+                updatePanelWithImage(imageUrl, index);
+            } catch (error) {
+                updatePanelWithError(index, error.message);
+                throw error;
+            }
+        }
+
+        generateBtn.addEventListener('click', async () => {
+            messageArea.textContent = ''; 
+            comicStripContainer.innerHTML = ''; 
+            downloadBtn.classList.add('hidden');
+            
+            const panelsData = [];
+            for (let i = 0; i < panelCount; i++) {
+                panelsData.push(getPanelData(i));
+            }
+            
+            if (panelsData.every(p => p === null)) { 
+                messageArea.textContent = "Please describe at least one panel."; 
+                return; 
+            }
+            
+            loadingOverlay.classList.remove('hidden');
+
+            panelsData.forEach((_, index) => {
+                 const panelDiv = document.createElement('div');
+                 panelDiv.className = 'comic-panel bg-gray-200 aspect-square flex items-center justify-center rounded-lg overflow-hidden';
+                 panelDiv.innerHTML = `<div class="loader"></div>`;
+                 comicStripContainer.appendChild(panelDiv);
+            });
+
+            let hasSuccess = false;
+            for (let i = 0; i < panelsData.length; i++) {
+                if (panelsData[i]) {
+                    try {
+                        await generatePanelImage(i);
+                        hasSuccess = true;
+                    } catch (error) {
+                        console.error(`Panel ${i+1} failed to generate:`, error);
+                    }
+                } else {
+                    updatePanelWithError(i, "Panel description is empty.");
+                }
+            }
+
+            if (hasSuccess) {
+                downloadBtn.classList.remove('hidden'); 
+            }
+
+            loadingOverlay.classList.add('hidden');
+        });
+
+        function updatePanelWithImage(imageUrl, index) {
+            const panel = comicStripContainer.children[index];
+            if (panel) {
+                panel.className = 'comic-panel aspect-square rounded-lg overflow-hidden';
+                panel.innerHTML = `
+                    <img src="${imageUrl}" alt="Comic panel scene" class="w-full h-full object-cover" crossOrigin="anonymous">
+                    <button onclick="window.regeneratePanel(${index})" class="regenerate-btn" title="Regenerate this panel">
+                        🔄
+                    </button>
+                `;
+            }
+        }
+        
+        function updatePanelWithError(index, message) {
+             const panel = comicStripContainer.children[index];
+             if (panel) {
+                 panel.className = 'comic-panel aspect-square flex items-center justify-center rounded-lg overflow-hidden bg-red-50';
+                 panel.innerHTML = `
+                    <div class="p-4 text-center text-red-700">
+                        <p class="font-bold text-lg">Error</p>
+                        <p class="text-sm mt-2">${message}</p>
+                    </div>
+                    <button onclick="window.regeneratePanel(${index})" class="regenerate-btn" title="Retry this panel">
+                        🔄
+                    </button>
+                 `;
+             }
+        }
+
+        window.regeneratePanel = async (index) => {
+            await generatePanelImage(index);
+        }
+        
+        // --- History Management ---
+        async function saveSession() {
+            if (!db || !userId) {
+                messageArea.textContent = 'Cannot save: Storage not initialized.';
+                return;
+            }
+            saveSessionBtn.disabled = true;
+            saveSessionBtn.textContent = 'Saving...';
+            const sessionData = {
+                style: stylePrompt.value,
+                characters: characters,
+                panels: getPanelData(0) ? Array.from({ length: panelCount }, (_, i) => getPanelData(i)) : [],
+                createdAt: serverTimestamp()
+            };
+            try {
+                const sessionsCol = collection(db, 'artifacts', appId, 'users', userId, 'sessions');
+                await addDoc(sessionsCol, sessionData);
+                messageArea.textContent = 'Session saved!';
+                setTimeout(() => messageArea.textContent = '', 2000);
+            } catch (error) {
+                console.error("Error saving session: ", error);
+                messageArea.textContent = 'Failed to save session.';
+            } finally {
+                saveSessionBtn.disabled = false;
+                saveSessionBtn.textContent = 'Save Session';
+            }
+        }
+        saveSessionBtn.addEventListener('click', saveSession);
+
+        async function showHistory() {
+            if (!db || !userId) {
+                messageArea.textContent = 'Cannot load history: Storage not initialized.';
+                return;
+            }
+            const sessionsCol = collection(db, 'artifacts', appId, 'users', userId, 'sessions');
+            const sessionSnapshot = await getDocs(sessionsCol);
+            savedSessionsCache = sessionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            renderHistoryList(savedSessionsCache);
+            historyModal.classList.remove('hidden');
+        }
+        historyBtn.addEventListener('click', showHistory);
+
+        closeHistoryModalBtn.addEventListener('click', () => historyModal.classList.add('hidden'));
+
+        function renderHistoryList(sessions) {
+            historyList.innerHTML = '';
+            if (sessions.length === 0) {
+                historyList.innerHTML = '<p>No saved sessions yet.</p>';
+                return;
+            }
+
+            sessions.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+            sessions.forEach((session, index) => {
+                const div = document.createElement('div');
+                div.className = 'p-3 bg-gray-100 rounded-lg flex justify-between items-center';
+                const date = session.createdAt ? new Date(session.createdAt.seconds * 1000).toLocaleString() : 'Legacy Save';
+                div.innerHTML = `
+                    <div>
+                        <p class="font-semibold">${date}</p>
+                        <p class="text-sm text-gray-600">${session.style || 'No style'} | ${session.characters.length} characters | ${session.panels.length} panels</p>
+                    </div>
+                    <div>
+                        <button class="bg-blue-500 text-white px-3 py-1 rounded text-sm mr-2" onclick="window.loadSession(${index})">Load</button>
+                        <button class="bg-red-500 text-white px-3 py-1 rounded text-sm" onclick="window.deleteSession('${session.id}')">Delete</button>
+                    </div>
+                `;
+                historyList.appendChild(div);
+            });
+        }
+        
+        window.loadSession = (index) => {
+            const session = savedSessionsCache[index];
+            if (!session) return;
+
+            comicStripContainer.innerHTML = '';
+            panelInputsContainer.innerHTML = '';
+            panelCount = 0;
+            characters = [];
+            
+            stylePrompt.value = session.style;
+            characters = session.characters;
+            renderCharacterList();
+            
+            if (session.panels.length === 0) {
+                addPanel(); // Add a default empty panel
+            } else {
+                session.panels.forEach((panelData, i) => {
+                    addPanel(panelData.scene, panelData.dialogues);
+                });
+            }
+            
+            historyModal.classList.add('hidden');
+            messageArea.textContent = 'Session loaded!';
+            setTimeout(() => messageArea.textContent = '', 2000);
+        }
+
+        window.deleteSession = async (sessionId) => {
+            if (!db || !userId) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'sessions', sessionId));
+                showHistory(); // Refresh the list
+            } catch (error) {
+                console.error("Error deleting session: ", error);
+                messageArea.textContent = "Failed to delete session.";
+            }
+        }
+
+        // --- Utility ---
+        downloadBtn.addEventListener('click', () => {
+            const buttons = document.querySelectorAll('.regenerate-btn');
+            buttons.forEach(b => b.style.display = 'none');
+
+            html2canvas(comicStripContainer, { useCORS: true, allowTaint: true, backgroundColor: '#ffffff' })
+            .then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'my-comic-strip.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }).catch(err => {
+                messageArea.textContent = "Could not download the comic. Please try again.";
+            }).finally(() => {
+                buttons.forEach(b => b.style.display = 'block');
+            });
+        });
+
+        // Initialize App
+        window.onload = async () => {
+            await initializeFirebase();
+            updateAllDialogueInputs();
+        };
+
+    </script>
+</body>
+</html>
